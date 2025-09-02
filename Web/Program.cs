@@ -1,34 +1,34 @@
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// Legg til tjenester i containeren.
 
 builder.Services.AddControllers();
 builder.Services.AddRazorPages();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// Konfigurer HTTP-forespørselsrørledningen.
 
 app.UseHttpsRedirection();
 
-// Security headers
+// Sikkerhetsheadere
 app.Use(async (context, next) =>
 {
     var env = app.Environment;
 
-    // Prevent MIME type sniffing
+    // Hindre MIME-type-sniffing
     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
 
-    // Basic clickjacking protection
+    // Grunnleggende beskyttelse mot clickjacking
     context.Response.Headers["X-Frame-Options"] = "DENY";
 
-    // Reduce referrer leakage
+    // Reduser lekkasje av referrer
     context.Response.Headers["Referrer-Policy"] = "no-referrer";
 
-    // Opt-in older XSS filters (harmless in modern browsers)
+    // Aktiver eldre XSS-filtre (ufarlig i moderne nettlesere)
     context.Response.Headers["X-XSS-Protection"] = "1; mode=block";
 
-    // Limit powerful APIs by default (loose and safe defaults)
+    // Begrens kraftige API-er som standard (løs og trygg standard)
     context.Response.Headers["Permissions-Policy"] =
         "geolocation=(), camera=(), fullscreen=(self)";
 
