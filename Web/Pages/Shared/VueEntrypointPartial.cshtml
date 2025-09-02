@@ -1,0 +1,47 @@
+@using Microsoft.Extensions.Hosting
+@using oledid.SyntaxImprovement
+@model string
+@inject Microsoft.Extensions.Configuration.IConfiguration configuration
+@inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment env
+
+<div id="entrypoint"></div>
+
+@Html.AntiForgeryToken()
+
+@{
+	var isLocal = env.IsDevelopment();
+	var viteServerUrl = (configuration["ViteServerUrl"] ?? "https://localhost:5174/").RemoveFromEnd("/");
+	if (isLocal)
+	{
+		@* if dev *@
+		<script type="module" src="@(viteServerUrl)/@@vite/client"></script>
+		<script type="module" src="@GetDevUrl()"></script>
+	}
+	else
+	{
+        @* if production *@
+
+        var manifestParser = await Web.Code.ViteManifestParser.FromFileAsync(System.IO.Path.Combine(env.WebRootPath, "./dist/.vite/manifest.json"));
+        var scriptUrl = manifestParser.GetScript(Model);
+		var styleUrls = manifestParser.GetStyles(Model);
+
+		foreach (var style in styleUrls)
+		{
+			<link rel="stylesheet" href="/dist/@(style)?c=@(DateTime.UtcNow.Ticks)" />
+		}
+
+		if (!string.IsNullOrWhiteSpace(scriptUrl))
+		{
+			<script type="module" src="/dist/@(scriptUrl)?c=@(DateTime.UtcNow.Ticks)"></script>
+		}
+	}
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////
+	// https://vitejs.dev/guide/backend-integration.html
+
+	string GetDevUrl()
+	{
+		// this points to the locally running vite server *@
+		return $"{viteServerUrl}/{Model}";
+	}
+}

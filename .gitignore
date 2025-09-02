@@ -1,0 +1,8 @@
+.vs
+obj
+bin
+node_modules
+*.suo
+*.user
+.chrome
+dist

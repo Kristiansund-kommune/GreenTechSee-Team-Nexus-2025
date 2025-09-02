@@ -1,0 +1,9 @@
+@page
+@model Web.Pages.IndexModel
+@{
+	Layout = "_Layout";
+}
+
+@{
+	await Html.RenderPartialAsync("~/Pages/Shared/VueEntrypointPartial.cshtml", "scripts/main.ts");
+}

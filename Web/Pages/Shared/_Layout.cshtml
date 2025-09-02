@@ -1,0 +1,22 @@
+@using Microsoft.Extensions.Hosting
+@inject IWebHostEnvironment Env
+<!DOCTYPE html>
+<html lang="nb">
+<head>
+	<meta charset="utf-8">
+	<title>GreenTechSee 2025 Team Nexus</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+	<meta name="mobile-web-app-capable" content="yes">
+	@{
+		if (!Env.IsDevelopment())
+		{
+			@* if not local *@
+			@* for production så kompileres alt i én css fil pga vite.config.js cssCodeSplit false *@
+			<link rel="stylesheet" href="/dist/assets/style.css?c=@(System.DateTime.UtcNow.Ticks)">
+		}
+	}
+</head>
+<body>
+	@RenderBody()
+</body>
+</html>

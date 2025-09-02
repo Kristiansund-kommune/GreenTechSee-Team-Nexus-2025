@@ -1,0 +1,68 @@
+{
+	"name": "greentechsee-2025-team-nexus",
+	"version": "0.1.0",
+	"repository": "https://github.com/Kristiansund-kommune/GreenTechSee-Team-Nexus-2025.git",
+	"author": "Ole Morten Didriksen Graskopf <code@oledid.com>",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "npm run pre-dev && concurrently \"vite\" \"npm run dev:watcher\"",
+		"pre-dev": "echo pre-dev",
+		"dev:watcher": "nodemon --verbose --watch Web/wwwroot -e vue,js,jsx,cjs,mjs,ts,tsx,cts,mts -x \"npm run lint-and-type-check-and-test\"",
+		"lint-and-type-check-and-test": "concurrently \"npm run lint\" \"npm run type-check\" \"npm run test\"",
+		"lint": "eslint . --fix",
+		"type-check": "vue-tsc --build --force",
+		"build": "npm run lint && npm audit && npm run audit-dotnet && run-p type-check \"build-only {@}\" --",
+		"audit-dotnet": "run-script-os",
+		"audit-dotnet:win32": "powershell.exe -Command \"$commandOutput = dotnet list package --vulnerable --include-transitive; if ($commandOutput.Contains('Severity') -or $commandOutput.Contains('severity')) { dotnet list package --vulnerable --include-transitive; exit 1 } else { exit 0 }\"",
+		"audit-dotnet:nix": "#!/bin/bash\n\ncommandOutput=$(dotnet list package --vulnerable) && { echo \"$commandOutput\" | grep -E 'Severity|severity' && dotnet list package --vulnerable --include-transitive; } && exit 1 || exit 0\n",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"build-only": "vite build"
+	},
+	"dependencies": {
+		"@popperjs/core": "^2.11.8",
+		"bluebird": "^3.7.2",
+		"bootstrap": "^5.3.3",
+		"core-js": "^3.40.0",
+		"dompurify": "^3.2.3",
+		"jquery": "^3.7.1",
+		"lodash-es": "^4.17.21",
+		"moment": "^2.30.1",
+		"vue": "^3.5.13",
+		"vue-router": "^4.5.0"
+	},
+	"devDependencies": {
+		"@eslint/eslintrc": "^3.2.0",
+		"@eslint/js": "^9.18.0",
+		"@tsconfig/node22": "^22.0.0",
+		"@types/bootstrap": "^5.2.10",
+		"@types/jquery": "^3.5.32",
+		"@types/jsdom": "^21.1.7",
+		"@types/lodash-es": "^4.17.12",
+		"@types/node": "^22.10.7",
+		"@vitejs/plugin-vue": "^5.2.1",
+		"@vue/test-utils": "^2.4.6",
+		"@vue/tsconfig": "^0.7.0",
+		"concurrently": "^9.1.2",
+		"eslint": "^9.18.0",
+		"eslint-plugin-vue": "^9.32.0",
+		"jsdom": "^26.0.0",
+		"less": "^4.2.2",
+		"nodemon": "^3.1.9",
+		"npm-run-all2": "^7.0.2",
+		"run-script-os": "^1.1.6",
+		"sass-embedded": "^1.86.3",
+		"typescript": "^5.7.3",
+		"typescript-eslint": "^8.26.1",
+		"vite": "^6.2.5",
+		"vitest": "^3.0.6",
+		"vue-tsc": "^2.2.0",
+		"whatwg-fetch": "^3.6.20"
+	},
+	"overrides": {
+		"vite": {
+			"esbuild": "^0.25.0"
+		}
+	}
+}
