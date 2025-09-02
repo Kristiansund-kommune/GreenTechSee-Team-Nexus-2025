@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Lint, type-check and test (Vitest)
+        run: npm run lint-and-type-check-and-test
+
+      - name: Build frontend (Vite + audits)
+        run: npm run build
+
+      - name: Restore .NET
+        run: dotnet restore Web/Web.csproj
+
+      - name: Build .NET
+        run: dotnet build Web/Web.csproj --configuration Release --no-restore
+
+      - name: Publish .NET
+        run: dotnet publish Web/Web.csproj --configuration Release --no-restore --output ./publish
+
+      - name: Upload publish artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-publish
+          path: ./publish
+
