@@ -1,0 +1,26 @@
+FROM python:3.12-slim
+
+# ffmpeg for transcoding non-WAV uploads
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+ && rm -rf /var/lib/apt/lists/*
+
+# Avoid PEP 668 by installing into a venv
+ENV VIRTUAL_ENV=/opt/venv
+RUN python -m venv $VIRTUAL_ENV
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
+# Install runtime deps (CPU-only)
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel python-multipart \
+ && pip install --no-cache-dir fastapi "uvicorn[standard]" faster-whisper
+
+WORKDIR /app
+COPY main.py /app/main.py
+
+ENV WHISPER_MODEL=large-v3
+ENV WHISPER_DEVICE=cpu
+ENV WHISPER_COMPUTE=int8
+
+EXPOSE 9000
+CMD ["python", "main.py"]
+

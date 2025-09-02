@@ -117,17 +117,19 @@ app.MapPost("/api/translate", async (HttpRequest req, IHttpClientFactory httpFac
 	var translation = ldoc.RootElement.GetProperty("choices")[0]
 		.GetProperty("message").GetProperty("content").GetString() ?? "";
 
-	// 4) Piper TTS → WAV
+	// 4) Piper TTS → WAV (via HTTP service)
 	var ttsOut = Path.Combine(workDir, "tts.wav");
-	var piperModel = Environment.GetEnvironmentVariable("PIPER_MODEL") ?? "/models/piper/en_US-libritts_high.onnx";
-	var piperConf = Environment.GetEnvironmentVariable("PIPER_CONFIG") ?? "/models/piper/en_US-libritts_high.onnx.json";
-
-	var piperOk = await Run(
-		"piper",
-		$"-m \"{piperModel}\" -c \"{piperConf}\" -f \"{ttsOut}\" -t \"{translation.Replace("\"", "\\\"")}\"",
-		timeout: TimeSpan.FromSeconds(30)
+	var piperClient = httpFactory.CreateClient("piper");
+	var pReq = new StringContent(
+		JsonSerializer.Serialize(new { text = translation }),
+		Encoding.UTF8,
+		"application/json"
 	);
-	if (!piperOk) return Results.Problem("piper failed");
+	var pRes = await piperClient.PostAsync("api/tts", pReq);
+	if (!pRes.IsSuccessStatusCode)
+		return Results.Problem($"piper error: {await pRes.Content.ReadAsStringAsync()}");
+	var audioBytes = await pRes.Content.ReadAsByteArrayAsync();
+	await File.WriteAllBytesAsync(ttsOut, audioBytes);
 
 	// 5) Persist & respond with URLs
 	var id = Guid.NewGuid().ToString("N");

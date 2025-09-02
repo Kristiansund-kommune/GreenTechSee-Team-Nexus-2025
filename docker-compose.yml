@@ -1,6 +1,7 @@
 name: greenTechSee_nexus
 services:
   whisper:
+    profiles: ["cuda"]
     build:
       context: ./whisper_service
       dockerfile: Dockerfile
@@ -15,6 +16,7 @@ services:
       - "${MODELS_DIR}/whisper-cache:/root/.cache"
 
   llama:
+    profiles: ["cuda"]
     image: ghcr.io/ggml-org/llama.cpp:server-cuda
     # ENTRYPOINT in the image is the server binary, so we only pass arguments:
     command: >
@@ -31,17 +33,30 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-  # llama-cpu:
-  #   profiles: ["cpu"]
-  #   image: ghcr.io/ggml-org/llama.cpp:server
-  #   command: >
-  #     -m /models/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf
-  #     --host 0.0.0.0 --port 8080 --api
-  #     -c 4096 -t 8
-  #   volumes:
-  #     - ./models:/models
-  #   ports:
-  #     - "8080:8080"
+  llama-cpu:
+    profiles: ["cpu"]
+    image: ghcr.io/ggml-org/llama.cpp:server
+    platform: linux/arm64
+    command: >
+      -m /models/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf
+      --host 0.0.0.0 --port 8080
+      -c 4096 -t 8
+    volumes:
+      - "${MODELS_DIR}:/models"
+    ports:
+      - "18080:8080"
+
+  whisper-cpu:
+    profiles: ["cpu"]
+    build:
+      context: ./whisper_service
+      dockerfile: Dockerfile.cpu
+    environment:
+      WHISPER_MODEL: large-v3
+      WHISPER_DEVICE: cpu
+      WHISPER_COMPUTE: int8
+    ports:
+      - "9000:9000"
 
   # OPTIONAL: simple HTTP wrapper for Piper TTS
   piper:
@@ -49,10 +64,12 @@ services:
     build:
       context: ./piper_service
       dockerfile: Dockerfile
-    # default voice (auto-downloads to /models/piper on first use)
-    command: >
-      python -m piper.http_server --host 0.0.0.0 --port 5002
-      --model en-us-libritts-high --data-dir /models/piper --download-dir /models/piper
+    # Use alias; pin data dirs so voices cache under the mounted /models/piper
+    command: ["python", "-m", "piper.http_server",
+      "--host", "0.0.0.0", "--port", "5002",
+      "--model", "en_US-lessac-high",
+      "--data-dir", "/models/piper", "--download-dir", "/models/piper"
+    ]
     volumes:
       - "${MODELS_DIR}:/models"
     ports: ["5002:5002"]
