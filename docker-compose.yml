@@ -1,0 +1,58 @@
+name: greenTechSee_nexus
+services:
+  whisper:
+    build:
+      context: ./whisper_service
+      dockerfile: Dockerfile
+    environment:
+      WHISPER_MODEL: large-v3
+      WHISPER_DEVICE: cuda
+      WHISPER_COMPUTE: float16
+    ports:
+      - "9000:9000"
+    gpus: all
+    volumes:
+      - "${MODELS_DIR}/whisper-cache:/root/.cache"
+
+  llama:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    # ENTRYPOINT in the image is the server binary, so we only pass arguments:
+    command: >
+      -m /models/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf
+      --host 0.0.0.0 --port 8080
+      -c 4096 -t 8 -ngl 35
+    volumes:
+      - "${MODELS_DIR}:/models"
+    ports:
+      - "18080:8080"
+    gpus: all
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  # llama-cpu:
+  #   profiles: ["cpu"]
+  #   image: ghcr.io/ggml-org/llama.cpp:server
+  #   command: >
+  #     -m /models/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf
+  #     --host 0.0.0.0 --port 8080 --api
+  #     -c 4096 -t 8
+  #   volumes:
+  #     - ./models:/models
+  #   ports:
+  #     - "8080:8080"
+
+  # OPTIONAL: simple HTTP wrapper for Piper TTS
+  piper:
+    profiles: ["cuda", "cpu"]
+    build:
+      context: ./piper_service
+      dockerfile: Dockerfile
+    # default voice (auto-downloads to /models/piper on first use)
+    command: >
+      python -m piper.http_server --host 0.0.0.0 --port 5002
+      --model en-us-libritts-high --data-dir /models/piper --download-dir /models/piper
+    volumes:
+      - "${MODELS_DIR}:/models"
+    ports: ["5002:5002"]

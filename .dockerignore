@@ -1,0 +1,26 @@
+# repo-wide
+.git
+.gitignore
+**/.DS_Store
+**/Thumbs.db
+
+# node / front-end
+**/node_modules
+**/dist
+**/.vite
+**/.nuxt
+
+# dotnet
+**/bin
+**/obj
+**/.vs
+
+# models & runtime data (mounted as volumes at runtime)
+models
+data
+
+# local env & artifacts
+.env
+*.log
+Dockerfile*~
+*.swp

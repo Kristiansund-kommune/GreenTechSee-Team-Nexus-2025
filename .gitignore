@@ -6,3 +6,5 @@ node_modules
 *.user
 .chrome
 dist
+publish
+models

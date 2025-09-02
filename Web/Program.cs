@@ -1,3 +1,8 @@
+using Microsoft.AspNetCore.StaticFiles;
+using System.Diagnostics;
+using System.Text;
+using System.Text.Json;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -5,6 +10,15 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddRazorPages();
 
+builder.Services.AddHttpClient("whisper", c => c.BaseAddress = new Uri(
+	builder.Configuration["Services:WhisperUrl"] ?? "http://localhost:9000/"));
+
+builder.Services.AddHttpClient("llama", c => c.BaseAddress = new Uri(
+	builder.Configuration["Services:LlamaUrl"] ?? "http://localhost:18080/"));
+
+// If using the HTTP piper service instead of local binary:
+builder.Services.AddHttpClient("piper", c => c.BaseAddress = new Uri(
+	builder.Configuration["Services:PiperUrl"] ?? "http://localhost:5002/"));
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -16,4 +30,126 @@ app.UseAuthorization();
 app.MapRazorPages();
 app.MapControllers();
 
+app.MapPost("/api/translate", async (HttpRequest req, IHttpClientFactory httpFactory) =>
+{
+	var form = await req.ReadFormAsync();
+	var file = form.Files["audio"];
+	if (file is null || file.Length == 0) return Results.BadRequest("Missing audio");
+
+	var sourceLang = form["sourceLang"].ToString();
+	var targetLang = form["targetLang"].ToString();
+	var prompt = form["prompt"].ToString();
+
+	var workDir = Path.Combine(Path.GetTempPath(), "stt", Guid.NewGuid().ToString());
+	Directory.CreateDirectory(workDir);
+	var rawPath = Path.Combine(workDir, file.FileName);
+	using (var fs = File.Create(rawPath)) await file.CopyToAsync(fs);
+	var wavPath = Path.Combine(workDir, "audio.wav");
+
+	// 1) transcode to 16 kHz mono PCM WAV
+	var ffOk = await Run(
+		"ffmpeg",
+		$"-y -i \"{rawPath}\" -ac 1 -ar 16000 -vn \"{wavPath}\"",
+		timeout: TimeSpan.FromSeconds(30)
+	);
+	if (!ffOk) return Results.Problem("ffmpeg failed");
+
+	// 2) whisper → transcript
+	var whisperClient = httpFactory.CreateClient("whisper");
+	using var mp = new MultipartFormDataContent();
+	mp.Add(new StreamContent(File.OpenRead(wavPath)), "audio", "audio.wav");
+	if (!string.IsNullOrWhiteSpace(sourceLang)) mp.Add(new StringContent(sourceLang), "sourceLang");
+
+	var wres = await whisperClient.PostAsync("transcribe", mp);
+	if (!wres.IsSuccessStatusCode)
+		return Results.Problem($"whisper error: {await wres.Content.ReadAsStringAsync()}");
+
+	var wJson = JsonDocument.Parse(await wres.Content.ReadAsStringAsync()).RootElement;
+	var transcript = wJson.GetProperty("text").GetString() ?? "";
+
+	// 3) llama.cpp → translation (OpenAI-compatible /v1/chat/completions)
+	var llamaClient = httpFactory.CreateClient("llama");
+	var sys = $"You are a translation engine. Translate the user's message into {targetLang}. " +
+			  $"Keep meaning and tone. Do not add commentary.";
+	if (!string.IsNullOrEmpty(prompt)) sys += $" Extra instructions: {prompt}";
+
+	var payload = new
+	{
+		model = Environment.GetEnvironmentVariable("LLAMA_MODEL") ?? "local",
+		messages = new object[] {
+			new { role = "system", content = sys },
+			new { role = "user", content = transcript }
+		},
+		temperature = 0.2
+	};
+	var lres = await llamaClient.PostAsync(
+		"v1/chat/completions",
+		new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
+	);
+	if (!lres.IsSuccessStatusCode)
+		return Results.Problem($"llama error: {await lres.Content.ReadAsStringAsync()}");
+
+	using var ldoc = JsonDocument.Parse(await lres.Content.ReadAsStringAsync());
+	var translation = ldoc.RootElement.GetProperty("choices")[0]
+		.GetProperty("message").GetProperty("content").GetString() ?? "";
+
+	// 4) Piper TTS → WAV
+	var ttsOut = Path.Combine(workDir, "tts.wav");
+	var piperModel = Environment.GetEnvironmentVariable("PIPER_MODEL") ?? "/models/piper/en_US-libritts_high.onnx";
+	var piperConf = Environment.GetEnvironmentVariable("PIPER_CONFIG") ?? "/models/piper/en_US-libritts_high.onnx.json";
+
+	var piperOk = await Run(
+		"piper",
+		$"-m \"{piperModel}\" -c \"{piperConf}\" -f \"{ttsOut}\" -t \"{translation.Replace("\"", "\\\"")}\"",
+		timeout: TimeSpan.FromSeconds(30)
+	);
+	if (!piperOk) return Results.Problem("piper failed");
+
+	// 5) Persist & respond with URLs
+	var id = Guid.NewGuid().ToString("N");
+	var storeDir = Path.Combine(app.Environment.ContentRootPath, "data", "audio");
+	Directory.CreateDirectory(storeDir);
+	var finalPath = Path.Combine(storeDir, $"{id}.wav");
+	File.Move(ttsOut, finalPath);
+
+	return Results.Json(new
+	{
+		transcript,
+		translation,
+		audioUrl = $"/api/translate/audio/{id}"
+	});
+});
+
+app.MapGet("/api/translate/audio/{id}", (string id) =>
+{
+	var path = Path.Combine(app.Environment.ContentRootPath, "data", "audio", $"{id}.wav");
+	if (!System.IO.File.Exists(path)) return Results.NotFound();
+	var provider = new FileExtensionContentTypeProvider();
+	provider.TryGetContentType(path, out var ct);
+	ct ??= "audio/wav";
+	var bytes = System.IO.File.ReadAllBytes(path);
+	return Results.File(bytes, ct);
+});
+
 app.Run();
+
+static async Task<bool> Run(string fileName, string args, TimeSpan? timeout = null)
+{
+	var psi = new ProcessStartInfo
+	{
+		FileName = fileName,
+		Arguments = args,
+		RedirectStandardOutput = true,
+		RedirectStandardError = true,
+		UseShellExecute = false
+	};
+	using var p = Process.Start(psi)!;
+	using var cts = new CancellationTokenSource(timeout ?? TimeSpan.FromSeconds(60));
+	var tcs = new TaskCompletionSource<bool>();
+	_ = Task.Run(async () =>
+	{
+		try { await p.WaitForExitAsync(cts.Token); tcs.TrySetResult(p.ExitCode == 0); }
+		catch { try { if (!p.HasExited) p.Kill(true); } catch { } tcs.TrySetResult(false); }
+	});
+	return await tcs.Task;
+}
