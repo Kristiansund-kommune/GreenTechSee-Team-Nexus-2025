@@ -25,8 +25,8 @@ export default defineConfig({
 	server : {
 		port: 5174,
 		https : {
-			key: fs.readFileSync("./cert/localhost.key"),
-			cert: fs.readFileSync("./cert/localhost.crt"),
+			key: fs.readFileSync("./cert/site.key"),
+			cert: fs.readFileSync("./cert/site.crt"),
 		},
 		cors: {
 			origin: "https://localhost:7039"

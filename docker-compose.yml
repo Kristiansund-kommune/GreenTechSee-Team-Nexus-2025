@@ -43,16 +43,10 @@ services:
   #   ports:
   #     - "8080:8080"
 
-  # OPTIONAL: simple HTTP wrapper for Piper TTS
   piper:
-    profiles: ["cuda", "cpu"]
     build:
       context: ./piper_service
       dockerfile: Dockerfile
-    # default voice (auto-downloads to /models/piper on first use)
-    command: >
-      python -m piper.http_server --host 0.0.0.0 --port 5002
-      --model en-us-libritts-high --data-dir /models/piper --download-dir /models/piper
-    volumes:
-      - "${MODELS_DIR}:/models"
     ports: ["5002:5002"]
+    restart: unless-stopped
+

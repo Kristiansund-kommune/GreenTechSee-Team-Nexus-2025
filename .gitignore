@@ -9,3 +9,4 @@ dist
 publish
 models
 .DS_Store
+Web/data/audio
