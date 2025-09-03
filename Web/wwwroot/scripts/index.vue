@@ -47,50 +47,53 @@
 			<div class="landing-header px-4 mx-4">
 				<img :src="`/images/nexus.png`" class="logo p-4 m-2" />
 			</div>
-			<div class="my-3">
-				<button class="change-lang rounded" @click="goToLanguage">
-					<img src="/scripts/pencel.svg" alt="Edit" />
-					<span>{{ t('common.changeLanguage') }}</span>
-				</button>
-			</div>
-			<div class="mb-3">
-				<div class="flex items-center mb-3">
-					<label class="text-sm">{{ t('common.from') }}</label>
-					<select v-model="sourceLang" class="border px-2 py-1 rounded">
-						<option value="auto">{{ t('common.autoDetect') }}</option>
-						<option v-for="l in LANG_OPTIONS" :key="l.code" :value="l.code">
-							{{ l.label }}
-						</option>
-					</select>
-
-					<label class="text-sm">→ {{ t('common.to') }}</label>
-					<select v-model="targetLang" class="border px-2 py-1 rounded">
-						<option v-for="l in LANG_OPTIONS" :key="l.code" :value="l.code">
-							{{ l.label }}
-						</option>
-					</select>
+			<div class="app-surface">
+				<div class="my-3 app-actions">
+					<button class="change-lang rounded" @click="goToLanguage">
+						<img src="/scripts/pencel.svg" alt="Edit" />
+						<span>{{ t('common.changeLanguage') }}</span>
+					</button>
 				</div>
-
-				<button type="button" :class="['btn text-white mb-3', isRecording ? 'bg-danger' : 'bg-primary']" style="min-width: 300px" @pointerdown="startRecording" @pointerup="stopRecording" @pointerleave="stopRecording" @keydown.space.prevent="startRecording" @keyup.space.prevent="stopRecording">
-					{{ isRecording ? t('common.releaseToStop') : t('common.pressHold') }}
-				</button>
-
-				<div v-if="status" class="text-sm text-gray-600 mb-3">{{ status }}</div>
-
 				<div class="mb-3">
-					<div v-if="transcript" class="text-sm">
-						<strong>{{ t('common.heard') }}</strong> {{ transcript }}
+					<div class="flex items-center mb-3 form-row">
+						<label class="text-sm px-2">{{ t('common.from') }}</label>
+						<select v-model="sourceLang" class="border px-2 py-1 rounded">
+							<option value="auto">{{ t('common.autoDetect') }}</option>
+							<option v-for="l in LANG_OPTIONS" :key="l.code" :value="l.code">
+								{{ l.label }}
+							</option>
+						</select>
+						<br>
+						<div class="p-1"></div>
+						<label class="text-sm px-2"> {{ t('common.to') }}</label>
+						<select v-model="targetLang" class="border px-2 py-1 rounded">
+							<option v-for="l in LANG_OPTIONS" :key="l.code" :value="l.code">
+								{{ l.label }}
+							</option>
+						</select>
 					</div>
-					<div v-if="translation" class="text-sm">
-						<strong>{{ t('common.translation') }}</strong> {{ translation }}
+
+					<button type="button" :class="['btn text-white mb-3', isRecording ? 'bg-danger' : 'bg-primary']" style="min-width: 300px" @pointerdown="startRecording" @pointerup="stopRecording" @pointerleave="stopRecording" @keydown.space.prevent="startRecording" @keyup.space.prevent="stopRecording">
+						{{ isRecording ? t('common.releaseToStop') : t('common.pressHold') }}
+					</button>
+
+					<div v-if="status" class="text-sm text-gray-600 mb-3">{{ status }}</div>
+
+					<div class="mb-3">
+						<div v-if="transcript" class="text-sm">
+							<strong>{{ t('common.heard') }}</strong> {{ transcript }}
+						</div>
+						<div v-if="translation" class="text-sm">
+							<strong>{{ t('common.translation') }}</strong> {{ translation }}
+						</div>
 					</div>
+
+					<audio v-if="audioUrl" ref="audioEl" :src="audioUrl" controls playsinline preload="auto" class="w-full"></audio>
+
+					<button v-if="showPlayPrompt" @click="manualPlay" class="mt-2 px-3 py-2 rounded bg-emerald-600 text-white">
+						{{ t('common.playTranslation') }}
+					</button>
 				</div>
-
-				<audio v-if="audioUrl" ref="audioEl" :src="audioUrl" controls playsinline preload="auto" class="w-full"></audio>
-
-				<button v-if="showPlayPrompt" @click="manualPlay" class="mt-2 px-3 py-2 rounded bg-emerald-600 text-white">
-					{{ t('common.playTranslation') }}
-				</button>
 			</div>
 		</div>
 	</div></template>
@@ -105,11 +108,11 @@
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	padding: 24px 16px;
+	padding: 28px 16px;
 }
-.landing-header { width: 100%; display: flex; justify-content: center; margin: 8px 0 24px; }
-.logo { width: 100%; height: auto; }
-.language { display: flex; flex-direction: column; align-items: center; margin-bottom: 24px; }
+.landing-header { width: 100%; display: flex; justify-content: center; margin: 12px 0 28px; }
+.logo { width: 100%; max-width: 240px; height: auto; display: block; }
+.language { display: flex; flex-direction: column; align-items: center; margin-bottom: 28px; }
 .flag-wrap { position: relative; width: 88px; height: 88px; }
 .lang-label { color: #6b7280; font-size: 14px; letter-spacing: .08em; margin-bottom: 8px; }
 .flag {
@@ -119,8 +122,8 @@
 .pencil { position: absolute; bottom: -6px; right: -6px; width: 36px; height: 36px; border-radius: 10px; border: none; background: #07869A; display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0,0,0,.15); }
 .pencil img { width: 18px; height: 18px; }
 .flag-emoji { font-size: 42px; }
-.cards { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 8px; }
-.card { background: #07869A; border: none; border-radius: 12px; padding: 16px; color: white; text-align: center; min-height: 160px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+.cards { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 16px; max-width: 520px; margin-left: auto; margin-right: auto; }
+.card { background: #07869A; border: none; border-radius: 12px; padding: 20px; color: white; text-align: center; min-height: 180px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
 .card-image { width: 120px; height: 120px; display: grid; place-items: center; margin-bottom: 8px; }
 .card-image img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .card-title { font-size: 16px; letter-spacing: .06em; }
@@ -148,6 +151,27 @@ button:active {
 .top-actions { display: flex; justify-content: flex-end; margin-bottom: 8px; }
 .change-lang { display: inline-flex; align-items: center; gap: 8px; border: none; background: #07869A; color: white; padding: 8px 12px; border-radius: 8px; }
 .change-lang img { width: 16px; height: 16px; }
+
+/* app surface (old logic view) */
+.app-surface {
+	background: #E1E9EB;
+	border-radius: 16px;
+	padding: 24px 18px;
+	margin: 0 16px 32px;
+	width: 100%;
+	max-width: 560px;
+	margin-left: auto;
+	margin-right: auto;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+}
+.app-surface > * + * { margin-top: 16px; }
+.app-actions { display: flex; justify-content: center; margin-bottom: 16px; width: 100%; }
+.form-row { gap: 16px; justify-content: center; flex-wrap: wrap; width: 100%; }
+.app-surface .btn { align-self: center; }
+.app-surface audio { width: 100%; max-width: 520px; }
 </style>
 
 <script lang="ts" setup>
