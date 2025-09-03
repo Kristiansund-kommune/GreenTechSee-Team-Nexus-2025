@@ -15,10 +15,9 @@
 
 				<label class="text-sm">→ To</label>
 				<select v-model="targetLang" class="border px-2 py-1 rounded">
-					<option value="en">English</option>
-					<option value="no">Norwegian</option>
-					<option value="es">Spanish</option>
-					<option value="uk">Ukrainian</option>
+					<option v-for="l in LANG_OPTIONS" :key="l.code" :value="l.code">
+						{{ l.label }}
+					</option>
 				</select>
 			</div>
 
@@ -69,7 +68,7 @@ const chunks: Blob[] = [];
 const streamRef = ref<MediaStream | null>(null);
 
 const sourceLang = ref<'auto' | string>('auto');
-const targetLang = ref<string>('en');
+const targetLang = ref<string>('no');
 
 const transcript = ref('');
 const translation = ref('');
@@ -134,6 +133,7 @@ const LANG_OPTIONS: Lang[] = _.sortBy([
 	{ code: 'sr', label: 'Serbian' },
 	{ code: 'bg', label: 'Bulgarian' },
 	{ code: 'tl', label: 'Tagalog (Filipino)' },
+	{ code: 'no', label: 'Norwegian' },
 ], e => e.label);
 
 function ensureAudioUnlocked() {
