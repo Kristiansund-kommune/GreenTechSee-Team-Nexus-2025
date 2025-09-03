@@ -73,7 +73,7 @@
 						</select>
 					</div>
 
-					<button type="button" :class="['btn text-white mb-3', isRecording ? 'bg-danger' : 'bg-primary']" style="min-width: 300px" @pointerdown="startRecording" @pointerup="stopRecording" @pointerleave="stopRecording" @keydown.space.prevent="startRecording" @keyup.space.prevent="stopRecording">
+					<button type="button" :class="['btn text-white mb-3 recording-button', isRecording ? 'bg-danger' : 'bg-primary']" style="min-width: 300px" @pointerdown="startRecording" @pointerup="stopRecording" @pointerleave="stopRecording" @keydown.space.prevent="startRecording" @keyup.space.prevent="stopRecording">
 						{{ isRecording ? t('common.releaseToStop') : t('common.pressHold') }}
 					</button>
 
@@ -139,13 +139,15 @@
 .picker-close { border: none; background: #07869A; color: white; padding: 12px 16px; }
 
 button {
-	/* better press/hold on mobile */
-	touch-action: none;
 	border: 3px solid transparent;
 }
 button:focus,
 button:active {
 	border: 3px solid black;
+}
+button.recording-button {
+	/* better press/hold on mobile */
+	touch-action: none;
 }
 
 .top-actions { display: flex; justify-content: flex-end; margin-bottom: 8px; }
