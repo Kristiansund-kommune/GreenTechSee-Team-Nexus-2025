@@ -1,41 +1,48 @@
 <template>
-	<div class="p-4 max-w-xl mx-auto space-y-4">
-		<div class="flex items-center gap-3">
-			<label class="text-sm">From</label>
-			<select v-model="sourceLang" class="border px-2 py-1 rounded">
-				<option value="auto">Auto (detect)</option>
-				<option v-for="l in LANG_OPTIONS" :key="l.code" :value="l.code">
-					{{ l.label }}
-				</option>
-			</select>
-
-			<label class="text-sm">→ To</label>
-			<select v-model="targetLang" class="border px-2 py-1 rounded">
-				<option value="en">English</option>
-				<option value="no">Norwegian</option>
-				<option value="es">Spanish</option>
-				<option value="uk">Ukrainian</option>
-			</select>
+	<div class="container">
+		<div class="mx-auto mb-3">
+			<img :src="`/images/nexus.png`" style="max-height: 100px;" />
 		</div>
+		<div class="mb-3">
+			<div class="flex items-center mb-3">
+				<label class="text-sm">From</label>
+				<select v-model="sourceLang" class="border px-2 py-1 rounded">
+					<option value="auto">Auto (detect)</option>
+					<option v-for="l in LANG_OPTIONS" :key="l.code" :value="l.code">
+						{{ l.label }}
+					</option>
+				</select>
 
-		<button :class="['w-full py-4 rounded-2xl', isRecording ? 'bg-red-600' : 'bg-indigo-600']" @pointerdown="startRecording" @pointerup="stopRecording" @pointerleave="stopRecording" @keydown.space.prevent="startRecording" @keyup.space.prevent="stopRecording">
-			{{ isRecording ? 'Release to stop…' : 'Press & hold to record' }}
-		</button>
+				<label class="text-sm">→ To</label>
+				<select v-model="targetLang" class="border px-2 py-1 rounded">
+					<option value="en">English</option>
+					<option value="no">Norwegian</option>
+					<option value="es">Spanish</option>
+					<option value="uk">Ukrainian</option>
+				</select>
+			</div>
 
-		<div v-if="status" class="text-sm text-gray-600">{{ status }}</div>
+			<button :class="['btn text-white mb-3', isRecording ? 'bg-danger' : 'bg-primary']" style="min-width: 300px" @pointerdown="startRecording" @pointerup="stopRecording" @pointerleave="stopRecording" @keydown.space.prevent="startRecording" @keyup.space.prevent="stopRecording">
+				{{ isRecording ? 'Release to stop…' : 'Press & hold to record' }}
+			</button>
 
-		<div v-if="transcript" class="text-sm">
-			<strong>Heard:</strong> {{ transcript }}
+			<div v-if="status" class="text-sm text-gray-600 mb-3">{{ status }}</div>
+
+			<div class="mb-3">
+				<div v-if="transcript" class="text-sm">
+					<strong>Heard:</strong> {{ transcript }}
+				</div>
+				<div v-if="translation" class="text-sm">
+					<strong>Translation:</strong> {{ translation }}
+				</div>
+			</div>
+
+			<audio v-if="audioUrl" ref="audioEl" :src="audioUrl" controls playsinline preload="auto" class="w-full"></audio>
+
+			<button v-if="showPlayPrompt" @click="manualPlay" class="mt-2 px-3 py-2 rounded bg-emerald-600 text-white">
+				Play translation
+			</button>
 		</div>
-		<div v-if="translation" class="text-sm">
-			<strong>Translation:</strong> {{ translation }}
-		</div>
-
-		<audio v-if="audioUrl" ref="audioEl" :src="audioUrl" controls playsinline preload="auto" class="w-full"></audio>
-
-		<button v-if="showPlayPrompt" @click="manualPlay" class="mt-2 px-3 py-2 rounded bg-emerald-600 text-white">
-			Play translation
-		</button>
 	</div>
 </template>
 
@@ -72,56 +79,56 @@ let currentNode: AudioBufferSourceNode | null = null;
 type Lang = { code: string; label: string };
 
 const LANG_OPTIONS: Lang[] = _.sortBy([
-  { code: 'en', label: 'English' },
-  { code: 'zh', label: 'Chinese' },
-  { code: 'hi', label: 'Hindi' },
-  { code: 'es', label: 'Spanish' },
-  { code: 'fr', label: 'French' },
-  { code: 'ar', label: 'Arabic' },
-  { code: 'bn', label: 'Bengali' },
-  { code: 'pt', label: 'Portuguese' },
-  { code: 'ru', label: 'Russian' },
-  { code: 'ur', label: 'Urdu' },
-  { code: 'id', label: 'Indonesian' },
-  { code: 'de', label: 'German' },
-  { code: 'ja', label: 'Japanese' },
-  { code: 'sw', label: 'Swahili' },
-  { code: 'mr', label: 'Marathi' },
-  { code: 'te', label: 'Telugu' },
-  { code: 'tr', label: 'Turkish' },
-  { code: 'ta', label: 'Tamil' },
-  { code: 'vi', label: 'Vietnamese' },
-  { code: 'ko', label: 'Korean' },
-  { code: 'it', label: 'Italian' },
-  { code: 'ha', label: 'Hausa' },
-  { code: 'th', label: 'Thai' },
-  { code: 'gu', label: 'Gujarati' },
-  { code: 'kn', label: 'Kannada' },
-  { code: 'fa', label: 'Persian (Farsi)' },
-  { code: 'ml', label: 'Malayalam' },
-  { code: 'or', label: 'Odia (Oriya)' },
-  { code: 'my', label: 'Burmese (Myanmar)' },
-  { code: 'nl', label: 'Dutch' },
-  { code: 'yo', label: 'Yoruba' },
-  { code: 'pl', label: 'Polish' },
-  { code: 'am', label: 'Amharic' },
-  { code: 'az', label: 'Azerbaijani' },
-  { code: 'uk', label: 'Ukrainian' },
-  { code: 'ig', label: 'Igbo' },
-  { code: 'uz', label: 'Uzbek' },
-  { code: 'ne', label: 'Nepali' },
-  { code: 'si', label: 'Sinhala' },
-  { code: 'ro', label: 'Romanian' },
-  { code: 'km', label: 'Khmer' },
-  { code: 'el', label: 'Greek' },
-  { code: 'cs', label: 'Czech' },
-  { code: 'sv', label: 'Swedish' },
-  { code: 'hu', label: 'Hungarian' },
-  { code: 'he', label: 'Hebrew' },
-  { code: 'pa', label: 'Punjabi' },
-  { code: 'sr', label: 'Serbian' },
-  { code: 'bg', label: 'Bulgarian' },
-  { code: 'tl', label: 'Tagalog (Filipino)' },
+	{ code: 'en', label: 'English' },
+	{ code: 'zh', label: 'Chinese' },
+	{ code: 'hi', label: 'Hindi' },
+	{ code: 'es', label: 'Spanish' },
+	{ code: 'fr', label: 'French' },
+	{ code: 'ar', label: 'Arabic' },
+	{ code: 'bn', label: 'Bengali' },
+	{ code: 'pt', label: 'Portuguese' },
+	{ code: 'ru', label: 'Russian' },
+	{ code: 'ur', label: 'Urdu' },
+	{ code: 'id', label: 'Indonesian' },
+	{ code: 'de', label: 'German' },
+	{ code: 'ja', label: 'Japanese' },
+	{ code: 'sw', label: 'Swahili' },
+	{ code: 'mr', label: 'Marathi' },
+	{ code: 'te', label: 'Telugu' },
+	{ code: 'tr', label: 'Turkish' },
+	{ code: 'ta', label: 'Tamil' },
+	{ code: 'vi', label: 'Vietnamese' },
+	{ code: 'ko', label: 'Korean' },
+	{ code: 'it', label: 'Italian' },
+	{ code: 'ha', label: 'Hausa' },
+	{ code: 'th', label: 'Thai' },
+	{ code: 'gu', label: 'Gujarati' },
+	{ code: 'kn', label: 'Kannada' },
+	{ code: 'fa', label: 'Persian (Farsi)' },
+	{ code: 'ml', label: 'Malayalam' },
+	{ code: 'or', label: 'Odia (Oriya)' },
+	{ code: 'my', label: 'Burmese (Myanmar)' },
+	{ code: 'nl', label: 'Dutch' },
+	{ code: 'yo', label: 'Yoruba' },
+	{ code: 'pl', label: 'Polish' },
+	{ code: 'am', label: 'Amharic' },
+	{ code: 'az', label: 'Azerbaijani' },
+	{ code: 'uk', label: 'Ukrainian' },
+	{ code: 'ig', label: 'Igbo' },
+	{ code: 'uz', label: 'Uzbek' },
+	{ code: 'ne', label: 'Nepali' },
+	{ code: 'si', label: 'Sinhala' },
+	{ code: 'ro', label: 'Romanian' },
+	{ code: 'km', label: 'Khmer' },
+	{ code: 'el', label: 'Greek' },
+	{ code: 'cs', label: 'Czech' },
+	{ code: 'sv', label: 'Swedish' },
+	{ code: 'hu', label: 'Hungarian' },
+	{ code: 'he', label: 'Hebrew' },
+	{ code: 'pa', label: 'Punjabi' },
+	{ code: 'sr', label: 'Serbian' },
+	{ code: 'bg', label: 'Bulgarian' },
+	{ code: 'tl', label: 'Tagalog (Filipino)' },
 ], e => e.label);
 
 function ensureAudioUnlocked() {
@@ -142,7 +149,7 @@ function stopWebAudio() {
 }
 
 async function playViaWebAudio(url: string) {
-	if (!audioCtx.value) {throw new Error('AudioContext not ready');}
+	if (!audioCtx.value) { throw new Error('AudioContext not ready'); }
 	await audioCtx.value.resume(); // in case it got suspended
 	const ab = await fetch(url, { cache: 'no-store' }).then(r => r.arrayBuffer());
 	const buf = await audioCtx.value.decodeAudioData(ab);
@@ -188,12 +195,12 @@ async function manualPlay() {
 // --- recording ---
 function pickMime(): string {
 	const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
-	for (const c of candidates) {if (MediaRecorder.isTypeSupported(c)) {return c;}}
+	for (const c of candidates) { if (MediaRecorder.isTypeSupported(c)) { return c; } }
 	return '';
 }
 
 async function startRecording() {
-	if (isRecording.value) {return;}
+	if (isRecording.value) { return; }
 	ensureAudioUnlocked();
 	stopWebAudio();
 	transcript.value = '';
@@ -211,7 +218,7 @@ async function startRecording() {
 	mediaRecorder.value = mr;
 	chunks.length = 0;
 
-	mr.ondataavailable = (e: BlobEvent) => { if (e.data && e.data.size > 0) {chunks.push(e.data);} };
+	mr.ondataavailable = (e: BlobEvent) => { if (e.data && e.data.size > 0) { chunks.push(e.data); } };
 	mr.onstart = () => { isRecording.value = true; status.value = 'Recording…'; };
 	mr.onstop = async () => {
 		isRecording.value = false;
@@ -225,7 +232,7 @@ async function startRecording() {
 }
 
 function stopRecording() {
-	if (!isRecording.value) {return;}
+	if (!isRecording.value) { return; }
 	mediaRecorder.value?.stop();
 }
 
@@ -245,7 +252,7 @@ async function sendForTranslation(blob: Blob) {
 		fd.append('prompt', 'Translate this speech faithfully. Respond only with the translation.');
 
 		const res = await fetch('/api/translate', { method: 'POST', body: fd });
-		if (!res.ok) {throw new Error((await res.text()) || `HTTP ${res.status}`);}
+		if (!res.ok) { throw new Error((await res.text()) || `HTTP ${res.status}`); }
 
 		const data = await res.json() as { transcript: string; translation: string; audioUrl: string };
 		transcript.value = data.transcript;

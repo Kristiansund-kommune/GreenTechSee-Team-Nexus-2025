@@ -199,6 +199,8 @@ app.MapGet("/api/translate/audio/{id}", (string id) =>
 	return Results.File(bytes, ct);
 });
 
+app.MapStaticAssets();
+
 app.Run();
 
 static async Task<bool> Run(string fileName, string args, TimeSpan? timeout = null)
