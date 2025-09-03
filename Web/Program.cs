@@ -54,6 +54,8 @@ app.UseStaticFiles();
 app.MapRazorPages();
 app.MapControllers();
 
+var ffmpegPath = app.Environment.IsDevelopment() ? "ffmpeg" : "C:\\home\\site\\deployments\\tools\\ffmpeg.exe";
+
 var useOpenAi = app.Configuration["OpenAi:UseOpenAi"] == "true";
 if (useOpenAi)
 {
@@ -88,7 +90,7 @@ if (useOpenAi)
 		// Normalize to 16 kHz mono PCM WAV — keeps behavior consistent across browsers/codecs
 		var wavPath = Path.Combine(workDir, "audio.wav");
 		var ffOk = await Run(
-			"ffmpeg",
+			ffmpegPath,
 			$"-y -i \"{rawPath}\" -ac 1 -ar 16000 -vn \"{wavPath}\"",
 			timeout: TimeSpan.FromSeconds(30)
 		);
@@ -251,7 +253,7 @@ else
 
 		// 1) transcode to 16 kHz mono PCM WAV
 		var ffOk = await Run(
-			"ffmpeg",
+			ffmpegPath,
 			$"-y -i \"{rawPath}\" -ac 1 -ar 16000 -vn \"{wavPath}\"",
 			timeout: TimeSpan.FromSeconds(30)
 		);
