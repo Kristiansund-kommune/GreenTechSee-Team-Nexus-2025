@@ -1,15 +1,16 @@
-# piper_service/Dockerfile
 FROM python:3.12-slim
 
-# Piper with HTTP extras (brings Flask), then download the voice
-RUN pip install --no-cache-dir "piper-tts[http]"
+# Nuke the unrelated 'piper' package if it ever sneaks in
+RUN pip uninstall -y piper || true
 
-# Where voices live *inside the image*
-ENV PIPER_DATA=/opt/piper/voices
-RUN mkdir -p "$PIPER_DATA"
+# Install the right one (brings the http extras too if you want Flask)
+RUN pip install --no-cache-dir "piper-tts[http]==1.3.0" fastapi "uvicorn[standard]"
 
-# Bake the voice files into the image layer
-RUN ["python", "-m", "piper.download_voices", "en_US-libritts-high", "--data-dir", "/opt/piper/voices", "--download-dir", "/opt/piper/voices"]
+WORKDIR /app
+COPY server.py /app/server.py
+
+ENV PIPER_DATA=/models/piper
+ENV PIPER_DEFAULT_VOICE=en_US-libritts-high
 
 EXPOSE 5002
-CMD ["python", "-m", "piper.http_server", "--host", "0.0.0.0", "--port", "5002", "--model", "en_US-libritts-high", "--data-dir", "/opt/piper/voices"]
+CMD ["uvicorn","server:app","--host","0.0.0.0","--port","5002"]

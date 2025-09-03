@@ -28,25 +28,25 @@ app.UseHttpsRedirection();
 // Sikkerhetsheadere
 app.Use(async (context, next) =>
 {
-    var env = app.Environment;
+	var env = app.Environment;
 
-    // Hindre MIME-type-sniffing
-    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+	// Hindre MIME-type-sniffing
+	context.Response.Headers["X-Content-Type-Options"] = "nosniff";
 
-    // Grunnleggende beskyttelse mot clickjacking
-    context.Response.Headers["X-Frame-Options"] = "DENY";
+	// Grunnleggende beskyttelse mot clickjacking
+	context.Response.Headers["X-Frame-Options"] = "DENY";
 
-    // Reduser lekkasje av referrer
-    context.Response.Headers["Referrer-Policy"] = "no-referrer";
+	// Reduser lekkasje av referrer
+	context.Response.Headers["Referrer-Policy"] = "no-referrer";
 
-    // Aktiver eldre XSS-filtre (ufarlig i moderne nettlesere)
-    context.Response.Headers["X-XSS-Protection"] = "1; mode=block";
+	// Aktiver eldre XSS-filtre (ufarlig i moderne nettlesere)
+	context.Response.Headers["X-XSS-Protection"] = "1; mode=block";
 
-    // Begrens kraftige API-er som standard (løs og trygg standard)
-    context.Response.Headers["Permissions-Policy"] =
-        "geolocation=(), camera=(), fullscreen=(self)";
+	// Begrens kraftige API-er som standard (løs og trygg standard)
+	context.Response.Headers["Permissions-Policy"] =
+		"geolocation=(), camera=(), fullscreen=(self)";
 
-    await next();
+	await next();
 });
 
 app.UseAuthorization();
@@ -91,9 +91,19 @@ app.MapPost("/api/translate", async (HttpRequest req, IHttpClientFactory httpFac
 	var wJson = JsonDocument.Parse(await wres.Content.ReadAsStringAsync()).RootElement;
 	var transcript = wJson.GetProperty("text").GetString() ?? "";
 
+	var langnames = new Dictionary<string, string>()
+	{
+		{ "en", "english" },
+		{ "no", "norwegian" },
+		{ "es", "spanish" },
+		{ "uk", "ukrainian" }
+	};
+
+	var langName = langnames[targetLang];
+
 	// 3) llama.cpp → translation (OpenAI-compatible /v1/chat/completions)
 	var llamaClient = httpFactory.CreateClient("llama");
-	var sys = $"You are a translation engine. Translate the user's message into {targetLang}. " +
+	var sys = $"You are a translation engine. Translate the user's message into {langName}. If the message is already in {langName}, just return the message as it is." +
 			  $"Keep meaning and tone. Do not add commentary.";
 	if (!string.IsNullOrEmpty(prompt)) sys += $" Extra instructions: {prompt}";
 
@@ -117,17 +127,32 @@ app.MapPost("/api/translate", async (HttpRequest req, IHttpClientFactory httpFac
 	var translation = ldoc.RootElement.GetProperty("choices")[0]
 		.GetProperty("message").GetProperty("content").GetString() ?? "";
 
-	// 4) Piper TTS → WAV (via Dockerized HTTP server)
+	// 4) Piper TTS → WAV (HTTP with voice per language)
 	var ttsOut = Path.Combine(workDir, "tts.wav");
 	var piperBaseUrl = Environment.GetEnvironmentVariable("PIPER_URL") ?? "http://localhost:5002/";
-	var piperEndpoint = new Uri(new Uri(piperBaseUrl), "/");
+	var piperClient = httpFactory.CreateClient("piper");
 
-	using var http = httpFactory.CreateClient("piper");
-	http.Timeout = TimeSpan.FromSeconds(60);
+	// map target language → piper voice id (fill in what you actually want)
+	var voiceMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+	{
+		["en"] = "en_US-libritts-high",
+		["no"] = "no_NO-talesyntese-medium",   // replace with your preferred NB voice id
+		["es"] = "es_ES-carlfm-x_low",         // example; pick your actual Spanish voice
+		["uk"] = "uk_UA-lada-x_low",
+		// add more as needed; fallbacks below handle unknowns
+	};
 
-	// Send JSON: { "text": "..." }
-	var piperPayload = new { text = translation };
-	using var piperReq = new HttpRequestMessage(HttpMethod.Post, piperEndpoint)
+	var targetVoice = voiceMap.TryGetValue(targetLang, out var v)
+		? v
+		: Environment.GetEnvironmentVariable("PIPER_DEFAULT_VOICE") ?? "en_US-libritts-high";
+
+	var piperPayload = new
+	{
+		text = translation,
+		voice = targetVoice
+	};
+
+	using var piperReq = new HttpRequestMessage(HttpMethod.Post, new Uri(new Uri(piperBaseUrl), "tts"))
 	{
 		Content = new StringContent(
 			System.Text.Json.JsonSerializer.Serialize(piperPayload),
@@ -135,14 +160,13 @@ app.MapPost("/api/translate", async (HttpRequest req, IHttpClientFactory httpFac
 			"application/json")
 	};
 
-	using var resp = await http.SendAsync(piperReq, HttpCompletionOption.ResponseHeadersRead);
+	using var resp = await piperClient.SendAsync(piperReq, HttpCompletionOption.ResponseHeadersRead);
 	if (!resp.IsSuccessStatusCode)
 	{
-		var errBody = await resp.Content.ReadAsStringAsync();
-		return Results.Problem($"piper http error: {(int)resp.StatusCode} {resp.ReasonPhrase} - {errBody}");
+		var err = await resp.Content.ReadAsStringAsync();
+		return Results.Problem($"piper http error: {(int)resp.StatusCode} {resp.ReasonPhrase} - {err}");
 	}
 
-	// stream WAV to file
 	await using (var fs = File.Create(ttsOut))
 	{
 		await resp.Content.CopyToAsync(fs);

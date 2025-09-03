@@ -59,10 +59,13 @@ services:
       - "9000:9000"
 
   piper:
-    profiles: ["cpu","cuda"]
     build:
       context: ./piper_service
-      dockerfile: Dockerfile
+    environment:
+      - PIPER_DATA=/models/piper
+      - PIPER_DEFAULT_VOICE=en_US-libritts-high
+    volumes:
+      - "${MODELS_DIR}:/models"   # e.g., D:/Models
     ports: ["5002:5002"]
     restart: unless-stopped
 
