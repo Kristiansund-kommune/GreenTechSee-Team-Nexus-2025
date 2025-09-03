@@ -44,7 +44,7 @@
 
 		<!-- Existing app view (unchanged logic) -->
 		<div v-else-if="currentView === 'app'" class="container">
-			<div class="landing-header px-4 mx-4">
+			<div class="landing-header px-4 ps-0 ms-3 mx-4">
 				<img :src="`/images/nexus.png`" class="logo p-4 m-2" />
 			</div>
 			<div class="app-surface">
