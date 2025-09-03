@@ -3,11 +3,10 @@
 		<div class="flex items-center gap-3">
 			<label class="text-sm">From</label>
 			<select v-model="sourceLang" class="border px-2 py-1 rounded">
-				<option value="auto">Auto</option>
-				<option value="en">English</option>
-				<option value="no">Norwegian</option>
-				<option value="es">Spanish</option>
-				<!-- add more -->
+				<option value="auto">Auto (detect)</option>
+				<option v-for="l in LANG_OPTIONS" :key="l.code" :value="l.code">
+					{{ l.label }}
+				</option>
 			</select>
 
 			<label class="text-sm">→ To</label>
@@ -15,11 +14,11 @@
 				<option value="en">English</option>
 				<option value="no">Norwegian</option>
 				<option value="es">Spanish</option>
+				<option value="uk">Ukrainian</option>
 			</select>
 		</div>
 
-		<button :class="['w-full py-4 rounded-2xl btn btn-primary',
-			isRecording ? 'bg-red-600' : 'bg-indigo-600']" @pointerdown="startRecording" @pointerup="stopRecording" @pointerleave="stopRecording" @keydown.space.prevent="startRecording" @keyup.space.prevent="stopRecording">
+		<button :class="['w-full py-4 rounded-2xl', isRecording ? 'bg-red-600' : 'bg-indigo-600']" @pointerdown="startRecording" @pointerup="stopRecording" @pointerleave="stopRecording" @keydown.space.prevent="startRecording" @keyup.space.prevent="stopRecording">
 			{{ isRecording ? 'Release to stop…' : 'Press & hold to record' }}
 		</button>
 
@@ -32,20 +31,24 @@
 			<strong>Translation:</strong> {{ translation }}
 		</div>
 
-		<audio v-if="audioUrl" :src="audioUrl" controls class="w-full"></audio>
+		<audio v-if="audioUrl" ref="audioEl" :src="audioUrl" controls playsinline preload="auto" class="w-full"></audio>
+
+		<button v-if="showPlayPrompt" @click="manualPlay" class="mt-2 px-3 py-2 rounded bg-emerald-600 text-white">
+			Play translation
+		</button>
 	</div>
 </template>
 
 <style scoped>
 button {
+	/* better press/hold on mobile */
 	touch-action: none;
 }
-
-/* better press/hold on mobile */
 </style>
 
 <script lang="ts" setup>
-import { ref, onBeforeUnmount } from 'vue';
+import { ref, onBeforeUnmount, nextTick } from 'vue';
+import * as _ from "lodash-es";
 
 const isRecording = ref(false);
 const status = ref('');
@@ -60,32 +63,146 @@ const transcript = ref('');
 const translation = ref('');
 const audioUrl = ref<string | null>(null);
 
-function pickMime(): string {
-	const candidates = [
-		'audio/webm;codecs=opus',
-		'audio/webm',
-		'audio/mp4', // Safari
-	];
-	for (const c of candidates) {
-		if (MediaRecorder.isTypeSupported(c)) {return c;}
+// --- audio playback (Web Audio first, <audio> fallback) ---
+const audioEl = ref<HTMLAudioElement | null>(null);
+const showPlayPrompt = ref(false);
+const audioCtx = ref<AudioContext | null>(null);
+let currentNode: AudioBufferSourceNode | null = null;
+
+type Lang = { code: string; label: string };
+
+const LANG_OPTIONS: Lang[] = _.sortBy([
+  { code: 'en', label: 'English' },
+  { code: 'zh', label: 'Chinese' },
+  { code: 'hi', label: 'Hindi' },
+  { code: 'es', label: 'Spanish' },
+  { code: 'fr', label: 'French' },
+  { code: 'ar', label: 'Arabic' },
+  { code: 'bn', label: 'Bengali' },
+  { code: 'pt', label: 'Portuguese' },
+  { code: 'ru', label: 'Russian' },
+  { code: 'ur', label: 'Urdu' },
+  { code: 'id', label: 'Indonesian' },
+  { code: 'de', label: 'German' },
+  { code: 'ja', label: 'Japanese' },
+  { code: 'sw', label: 'Swahili' },
+  { code: 'mr', label: 'Marathi' },
+  { code: 'te', label: 'Telugu' },
+  { code: 'tr', label: 'Turkish' },
+  { code: 'ta', label: 'Tamil' },
+  { code: 'vi', label: 'Vietnamese' },
+  { code: 'ko', label: 'Korean' },
+  { code: 'it', label: 'Italian' },
+  { code: 'ha', label: 'Hausa' },
+  { code: 'th', label: 'Thai' },
+  { code: 'gu', label: 'Gujarati' },
+  { code: 'kn', label: 'Kannada' },
+  { code: 'fa', label: 'Persian (Farsi)' },
+  { code: 'ml', label: 'Malayalam' },
+  { code: 'or', label: 'Odia (Oriya)' },
+  { code: 'my', label: 'Burmese (Myanmar)' },
+  { code: 'nl', label: 'Dutch' },
+  { code: 'yo', label: 'Yoruba' },
+  { code: 'pl', label: 'Polish' },
+  { code: 'am', label: 'Amharic' },
+  { code: 'az', label: 'Azerbaijani' },
+  { code: 'uk', label: 'Ukrainian' },
+  { code: 'ig', label: 'Igbo' },
+  { code: 'uz', label: 'Uzbek' },
+  { code: 'ne', label: 'Nepali' },
+  { code: 'si', label: 'Sinhala' },
+  { code: 'ro', label: 'Romanian' },
+  { code: 'km', label: 'Khmer' },
+  { code: 'el', label: 'Greek' },
+  { code: 'cs', label: 'Czech' },
+  { code: 'sv', label: 'Swedish' },
+  { code: 'hu', label: 'Hungarian' },
+  { code: 'he', label: 'Hebrew' },
+  { code: 'pa', label: 'Punjabi' },
+  { code: 'sr', label: 'Serbian' },
+  { code: 'bg', label: 'Bulgarian' },
+  { code: 'tl', label: 'Tagalog (Filipino)' },
+], e => e.label);
+
+function ensureAudioUnlocked() {
+	if (!audioCtx.value) {
+		// @ts-ignore webkit prefix for older iOS
+		const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+		audioCtx.value = new Ctx();
 	}
-	return ''; // let browser choose
+	if (audioCtx.value.state === 'suspended') {
+		void audioCtx.value.resume();
+	}
+}
+
+function stopWebAudio() {
+	try { currentNode?.stop(0); } catch { }
+	currentNode?.disconnect();
+	currentNode = null;
+}
+
+async function playViaWebAudio(url: string) {
+	if (!audioCtx.value) {throw new Error('AudioContext not ready');}
+	await audioCtx.value.resume(); // in case it got suspended
+	const ab = await fetch(url, { cache: 'no-store' }).then(r => r.arrayBuffer());
+	const buf = await audioCtx.value.decodeAudioData(ab);
+	stopWebAudio(); // avoid overlap
+	const src = audioCtx.value.createBufferSource();
+	src.buffer = buf;
+	src.connect(audioCtx.value.destination);
+	src.start(0);
+	currentNode = src;
+}
+
+async function autoplayNow(url: string) {
+	showPlayPrompt.value = false;
+
+	// try Web Audio (most reliable after a user gesture)
+	try {
+		await playViaWebAudio(url);
+		return;
+	} catch {
+		// fall back to <audio>.play()
+	}
+
+	await nextTick();
+	try {
+		await audioEl.value?.play();
+	} catch {
+		showPlayPrompt.value = true; // user must tap
+	}
+}
+
+async function manualPlay() {
+	ensureAudioUnlocked();
+	if (audioUrl.value) {
+		try {
+			await playViaWebAudio(audioUrl.value);
+			showPlayPrompt.value = false;
+		} catch {
+			try { await audioEl.value?.play(); showPlayPrompt.value = false; } catch { }
+		}
+	}
+}
+
+// --- recording ---
+function pickMime(): string {
+	const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
+	for (const c of candidates) {if (MediaRecorder.isTypeSupported(c)) {return c;}}
+	return '';
 }
 
 async function startRecording() {
 	if (isRecording.value) {return;}
+	ensureAudioUnlocked();
+	stopWebAudio();
 	transcript.value = '';
 	translation.value = '';
 	audioUrl.value = null;
 	status.value = 'Requesting microphone…';
 
 	const stream = await navigator.mediaDevices.getUserMedia({
-		audio: {
-			echoCancellation: true,
-			noiseSuppression: true,
-			channelCount: 1,
-			sampleRate: 48000,
-		},
+		audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1, sampleRate: 48000 },
 	});
 	streamRef.value = stream;
 
@@ -94,13 +211,8 @@ async function startRecording() {
 	mediaRecorder.value = mr;
 	chunks.length = 0;
 
-	mr.ondataavailable = (e: BlobEvent) => {
-		if (e.data && e.data.size > 0) {chunks.push(e.data);}
-	};
-	mr.onstart = () => {
-		isRecording.value = true;
-		status.value = 'Recording…';
-	};
+	mr.ondataavailable = (e: BlobEvent) => { if (e.data && e.data.size > 0) {chunks.push(e.data);} };
+	mr.onstart = () => { isRecording.value = true; status.value = 'Recording…'; };
 	mr.onstop = async () => {
 		isRecording.value = false;
 		status.value = 'Uploading…';
@@ -109,7 +221,7 @@ async function startRecording() {
 		cleanupStream();
 	};
 
-	mr.start(); // non-streaming (we send after release)
+	mr.start();
 }
 
 function stopRecording() {
@@ -123,6 +235,7 @@ function cleanupStream() {
 	mediaRecorder.value = null;
 }
 
+// --- server call ---
 async function sendForTranslation(blob: Blob) {
 	try {
 		const fd = new FormData();
@@ -131,30 +244,26 @@ async function sendForTranslation(blob: Blob) {
 		fd.append('targetLang', targetLang.value);
 		fd.append('prompt', 'Translate this speech faithfully. Respond only with the translation.');
 
-		const res = await fetch('/api/translate', {
-			method: 'POST',
-			body: fd,
-		});
+		const res = await fetch('/api/translate', { method: 'POST', body: fd });
+		if (!res.ok) {throw new Error((await res.text()) || `HTTP ${res.status}`);}
 
-		if (!res.ok) {
-			const t = await res.text();
-			throw new Error(t || `HTTP ${res.status}`);
-		}
-		const data = await res.json() as {
-			transcript: string;
-			translation: string;
-			audioUrl: string; // /api/translate/audio/{id}
-		};
-
+		const data = await res.json() as { transcript: string; translation: string; audioUrl: string };
 		transcript.value = data.transcript;
 		translation.value = data.translation;
 		audioUrl.value = data.audioUrl;
 		status.value = 'Done.';
+
+		// immediate autoplay using unlocked Web Audio; fallback is handled inside
+		await autoplayNow(data.audioUrl);
 	} catch (err: any) {
 		console.error(err);
 		status.value = `Error: ${err.message || err}`;
+		showPlayPrompt.value = true;
 	}
 }
 
-onBeforeUnmount(cleanupStream);
+onBeforeUnmount(() => {
+	cleanupStream();
+	stopWebAudio();
+});
 </script>
