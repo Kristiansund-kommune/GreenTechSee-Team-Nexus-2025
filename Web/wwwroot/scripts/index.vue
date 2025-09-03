@@ -1,51 +1,140 @@
 <template>
-	<div class="container">
-		<div class="mx-auto mb-3">
-			<img :src="`/images/nexus.png`" style="max-height: 100px;" />
-		</div>
-		<div class="mb-3">
-			<div class="flex items-center mb-3">
-				<label class="text-sm">From</label>
-				<select v-model="sourceLang" class="border px-2 py-1 rounded">
-					<option value="auto">Auto (detect)</option>
-					<option v-for="l in LANG_OPTIONS" :key="l.code" :value="l.code">
-						{{ l.label }}
-					</option>
-				</select>
-
-				<label class="text-sm">→ To</label>
-				<select v-model="targetLang" class="border px-2 py-1 rounded">
-					<option v-for="l in LANG_OPTIONS" :key="l.code" :value="l.code">
-						{{ l.label }}
-					</option>
-				</select>
+	<div class="mobile-root">
+		<!-- Landing view -->
+		<div v-if="currentView === 'landing'" class="landing">
+			<div class="landing-header px-4 mx-4">
+				<img :src="`/images/nexus.png`" class="logo p-4 m-2" />
 			</div>
+			<div class="language pb-4">
+				<div class="lang-label">{{ currentLang.label?.toUpperCase?.() || currentLang.label }}</div>
+				<div class="flag-wrap">
+					<button class="flag" @click="openPicker">
+						<span class="flag-emoji">{{ currentLang.flag }}</span>
+					</button>
+					<button class="pencil" @click="openPicker" aria-label="Edit language">
+						<img src="/scripts/pencel.svg" alt="Edit" />
+					</button>
+				</div>
+			</div>
+			<div class="cards">
+				<button class="card" @click="goParticipant">
+					<div class="card-image"><img src="/images/deltager.png" alt="Participant" /></div>
+					<div class="card-title">{{ currentLang.participant }}</div>
+				</button>
+				<button class="card" @click="goCoach">
+					<div class="card-image"><img src="/images/veilder.png" alt="Coach" /></div>
+					<div class="card-title">{{ currentLang.coach }}</div>
+				</button>
+			</div>
+		</div>
 
-			<button type="button" :class="['btn text-white mb-3', isRecording ? 'bg-danger' : 'bg-primary']" style="min-width: 300px" @pointerdown="startRecording" @pointerup="stopRecording" @pointerleave="stopRecording" @keydown.space.prevent="startRecording" @keyup.space.prevent="stopRecording">
-				{{ isRecording ? 'Release to stop…' : 'Press & hold to record' }}
-			</button>
+		<!-- Language picker overlay -->
+		<div v-if="showPicker" class="picker" @click.self="closePicker">
+			<div class="picker-panel">
+				<div class="picker-header">{{ t('common.selectLanguage') }}</div>
+				<div class="picker-list">
+					<button v-for="(meta, code) in supportedLangsSorted" :key="code" class="picker-item" @click="chooseLanguage(code as string)">
+						<span class="picker-flag">{{ meta.flag || '🏳️' }}</span>
+						<span class="picker-label">{{ meta.label }}</span>
+					</button>
+				</div>
+				<button class="picker-close" @click="closePicker">{{ t('common.close') }}</button>
+			</div>
+		</div>
 
-			<div v-if="status" class="text-sm text-gray-600 mb-3">{{ status }}</div>
-
+		<!-- Existing app view (unchanged logic) -->
+		<div v-else-if="currentView === 'app'" class="container">
+			<div class="landing-header px-4 mx-4">
+				<img :src="`/images/nexus.png`" class="logo p-4 m-2" />
+			</div>
+			<div class="my-3">
+				<button class="change-lang rounded" @click="goToLanguage">
+					<img src="/scripts/pencel.svg" alt="Edit" />
+					<span>{{ t('common.changeLanguage') }}</span>
+				</button>
+			</div>
 			<div class="mb-3">
-				<div v-if="transcript" class="text-sm">
-					<strong>Heard:</strong> {{ transcript }}
+				<div class="flex items-center mb-3">
+					<label class="text-sm">{{ t('common.from') }}</label>
+					<select v-model="sourceLang" class="border px-2 py-1 rounded">
+						<option value="auto">{{ t('common.autoDetect') }}</option>
+						<option v-for="l in LANG_OPTIONS" :key="l.code" :value="l.code">
+							{{ l.label }}
+						</option>
+					</select>
+
+					<label class="text-sm">→ {{ t('common.to') }}</label>
+					<select v-model="targetLang" class="border px-2 py-1 rounded">
+						<option v-for="l in LANG_OPTIONS" :key="l.code" :value="l.code">
+							{{ l.label }}
+						</option>
+					</select>
 				</div>
-				<div v-if="translation" class="text-sm">
-					<strong>Translation:</strong> {{ translation }}
+
+				<button type="button" :class="['btn text-white mb-3', isRecording ? 'bg-danger' : 'bg-primary']" style="min-width: 300px" @pointerdown="startRecording" @pointerup="stopRecording" @pointerleave="stopRecording" @keydown.space.prevent="startRecording" @keyup.space.prevent="stopRecording">
+					{{ isRecording ? t('common.releaseToStop') : t('common.pressHold') }}
+				</button>
+
+				<div v-if="status" class="text-sm text-gray-600 mb-3">{{ status }}</div>
+
+				<div class="mb-3">
+					<div v-if="transcript" class="text-sm">
+						<strong>{{ t('common.heard') }}</strong> {{ transcript }}
+					</div>
+					<div v-if="translation" class="text-sm">
+						<strong>{{ t('common.translation') }}</strong> {{ translation }}
+					</div>
 				</div>
+
+				<audio v-if="audioUrl" ref="audioEl" :src="audioUrl" controls playsinline preload="auto" class="w-full"></audio>
+
+				<button v-if="showPlayPrompt" @click="manualPlay" class="mt-2 px-3 py-2 rounded bg-emerald-600 text-white">
+					{{ t('common.playTranslation') }}
+				</button>
 			</div>
-
-			<audio v-if="audioUrl" ref="audioEl" :src="audioUrl" controls playsinline preload="auto" class="w-full"></audio>
-
-			<button v-if="showPlayPrompt" @click="manualPlay" class="mt-2 px-3 py-2 rounded bg-emerald-600 text-white">
-				Play translation
-			</button>
 		</div>
-	</div>
-</template>
+	</div></template>
 
 <style scoped>
+.mobile-root {
+	min-height: 100dvh;
+	background: white;
+	;
+}
+.landing {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding: 24px 16px;
+}
+.landing-header { width: 100%; display: flex; justify-content: center; margin: 8px 0 24px; }
+.logo { width: 100%; height: auto; }
+.language { display: flex; flex-direction: column; align-items: center; margin-bottom: 24px; }
+.flag-wrap { position: relative; width: 88px; height: 88px; }
+.lang-label { color: #6b7280; font-size: 14px; letter-spacing: .08em; margin-bottom: 8px; }
+.flag {
+	width: 88px; height: 88px; border-radius: 9999px; background: white; box-shadow: 0 3px 10px rgba(0,0,0,.08);
+	display: grid; place-items: center; border: none;
+}
+.pencil { position: absolute; bottom: -6px; right: -6px; width: 36px; height: 36px; border-radius: 10px; border: none; background: #07869A; display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0,0,0,.15); }
+.pencil img { width: 18px; height: 18px; }
+.flag-emoji { font-size: 42px; }
+.cards { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 8px; }
+.card { background: #07869A; border: none; border-radius: 12px; padding: 16px; color: white; text-align: center; min-height: 160px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+.card-image { width: 120px; height: 120px; display: grid; place-items: center; margin-bottom: 8px; }
+.card-image img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.card-title { font-size: 16px; letter-spacing: .06em; }
+
+/* picker */
+.picker { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: grid; place-items: end center; }
+.picker-panel { background: white; width: 100%; max-height: 80vh; border-top-left-radius: 16px; border-top-right-radius: 16px; overflow: hidden; display: flex; flex-direction: column; }
+.picker-header { padding: 12px 16px; font-weight: 600; text-align: center; border-bottom: 1px solid #eee; }
+.picker-list { overflow: auto; -webkit-overflow-scrolling: touch; }
+.picker-item { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 16px; border: none; background: white; border-bottom: 1px solid #f2f2f2; text-align: left; }
+.picker-flag { font-size: 20px; width: 28px; }
+.picker-label { font-size: 16px; }
+.picker-close { border: none; background: #07869A; color: white; padding: 12px 16px; }
+
 button {
 	/* better press/hold on mobile */
 	touch-action: none;
@@ -55,11 +144,17 @@ button:focus,
 button:active {
 	border: 3px solid black;
 }
+
+.top-actions { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+.change-lang { display: inline-flex; align-items: center; gap: 8px; border: none; background: #07869A; color: white; padding: 8px 12px; border-radius: 8px; }
+.change-lang img { width: 16px; height: 16px; }
 </style>
 
 <script lang="ts" setup>
-import { ref, onBeforeUnmount, nextTick } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import * as _ from "lodash-es";
+import LANGS from './languages.json';
+import TRANSLATIONS from './translations.json';
 
 const isRecording = ref(false);
 const status = ref('');
@@ -69,6 +164,59 @@ const streamRef = ref<MediaStream | null>(null);
 
 const sourceLang = ref<'auto' | string>('auto');
 const targetLang = ref<string>('no');
+
+// --- simple view switch ---
+type View = 'landing' | 'app' | 'coach';
+const currentView = ref<View>('landing');
+
+const supportedLangs = LANGS as Record<string, { label: string; flag?: string; participant?: string; coach?: string }>;
+const supportedLangsSorted = computed(() => Object.fromEntries(Object.entries(supportedLangs).sort((a, b) => a[1].label.localeCompare(b[1].label))));
+const selectedLangCode = ref<string>(localStorage.getItem('selectedLang') || 'no');
+const currentLang = computed(() => supportedLangs[selectedLangCode.value] || supportedLangs['no']);
+
+// --- i18n helper (UI language follows selected language) ---
+type AnyMap = Record<string, any>;
+const translations = TRANSLATIONS as unknown as AnyMap;
+const uiLang = computed(() => selectedLangCode.value || 'en');
+function t(key: string): string {
+	const parts = key.split('.');
+	let node: any = translations;
+	for (const p of parts) { node = node?.[p]; }
+	if (!node || typeof node !== 'object') { return key; }
+	return node[uiLang.value] || node['en'] || Object.values(node)[0] || key;
+}
+
+const showPicker = ref(false);
+function openPicker() { showPicker.value = true; }
+function closePicker() { showPicker.value = false; }
+function chooseLanguage(code: string) {
+	if (supportedLangs[code]) {
+		selectedLangCode.value = code;
+		localStorage.setItem('selectedLang', selectedLangCode.value);
+	}
+	showPicker.value = false;
+}
+
+function goToLanguage() {
+	currentView.value = 'landing';
+}
+
+function goParticipant() {
+	// Move to existing app with the chosen target language
+	targetLang.value = selectedLangCode.value;
+	currentView.value = 'app';
+}
+
+function goCoach() {
+	// For now just use same as app; can be customized later
+	currentView.value = 'app';
+}
+
+onMounted(() => {
+	// Restore language into current app if re-entering
+	const saved = localStorage.getItem('selectedLang');
+	if (saved) { targetLang.value = saved; }
+});
 
 const transcript = ref('');
 const translation = ref('');
@@ -148,7 +296,7 @@ function ensureAudioUnlocked() {
 }
 
 function stopWebAudio() {
-	try { currentNode?.stop(0); } catch { }
+	try { currentNode?.stop(0); } catch (e) { void e; }
 	currentNode?.disconnect();
 	currentNode = null;
 }
@@ -192,7 +340,7 @@ async function manualPlay() {
 			await playViaWebAudio(audioUrl.value);
 			showPlayPrompt.value = false;
 		} catch {
-			try { await audioEl.value?.play(); showPlayPrompt.value = false; } catch { }
+			try { await audioEl.value?.play(); showPlayPrompt.value = false; } catch (e) { void e; }
 		}
 	}
 }
@@ -211,7 +359,7 @@ async function startRecording() {
 	transcript.value = '';
 	translation.value = '';
 	audioUrl.value = null;
-	status.value = 'Requesting microphone…';
+	status.value = t('common.status_requestMic');
 
 	const stream = await navigator.mediaDevices.getUserMedia({
 		audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1, sampleRate: 48000 },
@@ -224,10 +372,10 @@ async function startRecording() {
 	chunks.length = 0;
 
 	mr.ondataavailable = (e: BlobEvent) => { if (e.data && e.data.size > 0) { chunks.push(e.data); } };
-	mr.onstart = () => { isRecording.value = true; status.value = 'Recording…'; };
+	mr.onstart = () => { isRecording.value = true; status.value = t('common.status_recording'); };
 	mr.onstop = async () => {
 		isRecording.value = false;
-		status.value = 'Uploading…';
+		status.value = t('common.status_uploading');
 		const blob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' });
 		await sendForTranslation(blob);
 		cleanupStream();
@@ -263,13 +411,13 @@ async function sendForTranslation(blob: Blob) {
 		transcript.value = data.transcript;
 		translation.value = data.translation;
 		audioUrl.value = data.audioUrl;
-		status.value = 'Done.';
+		status.value = t('common.status_done');
 
 		// immediate autoplay using unlocked Web Audio; fallback is handled inside
 		await autoplayNow(data.audioUrl);
 	} catch (err: any) {
 		console.error(err);
-		status.value = `Error: ${err.message || err}`;
+		status.value = `${t('common.status_error_prefix')} ${err.message || err}`;
 		showPlayPrompt.value = true;
 	}
 }
