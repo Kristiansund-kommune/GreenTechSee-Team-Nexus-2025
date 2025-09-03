@@ -49,7 +49,7 @@ export default defineConfig({
 		target: "modules",
 		rollupOptions: {
 			input: [
-				"scripts/index.vue",
+				"scripts/main.ts",
 			].map(str => "Web/wwwroot/" + str),
 			output: {
 				entryFileNames: `assets/[name].js`,

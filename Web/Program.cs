@@ -22,8 +22,7 @@ builder.Services.AddHttpClient("piper", c => c.BaseAddress = new Uri(
 var app = builder.Build();
 
 // Konfigurer HTTP-forespørselsrørledningen.
-
-app.UseHttpsRedirection();
+// app.UseHttpsRedirection();
 
 // Sikkerhetsheadere
 app.Use(async (context, next) =>
@@ -50,6 +49,7 @@ app.Use(async (context, next) =>
 });
 
 app.UseAuthorization();
+app.UseStaticFiles();
 
 app.MapRazorPages();
 app.MapControllers();
@@ -198,8 +198,6 @@ app.MapGet("/api/translate/audio/{id}", (string id) =>
 	var bytes = System.IO.File.ReadAllBytes(path);
 	return Results.File(bytes, ct);
 });
-
-app.MapStaticAssets();
 
 app.Run();
 
