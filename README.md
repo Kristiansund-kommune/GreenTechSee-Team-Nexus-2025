@@ -1,3 +1,6 @@
+
+<img width="3040" height="666" alt="image" src="https://github.com/user-attachments/assets/6c8fcd18-279f-4142-97a5-952b967ab9e4" />
+
 # GreenTechSee-Team-Nexus-2025
 
 An end-to-end, local-first speech translation pipeline:
@@ -248,3 +251,4 @@ No. The repository uses a Dockerized Piper HTTP service. The legacy `piper_servi
 - Whisper model usage via faster-whisper
 - Piper TTS via piper-tts
 - Frontend tooling: Vite + Vue 3 + Vitest
+
